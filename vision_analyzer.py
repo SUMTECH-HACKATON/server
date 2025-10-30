@@ -104,7 +104,6 @@ def call_gpt_vision(data_url: str, model: str = DEFAULT_MODEL) -> str:
     )
     return response.output_text.strip()
 
-
 @router.post("/analyze")
 def analyze_image(file: UploadFile = File(...), model: str = Form(DEFAULT_MODEL)):
     """
@@ -114,13 +113,13 @@ def analyze_image(file: UploadFile = File(...), model: str = Form(DEFAULT_MODEL)
         content = file.file.read()
         img = Image.open(BytesIO(content)).convert("RGB")
 
-        # 크기 제한
+        # ✅ 크기 제한
         w, h = img.size
         scale = max(w, h) / float(MAX_SIDE)
         if scale > 1.0:
             img = img.resize((int(w / scale), int(h / scale)), Image.LANCZOS)
 
-        # PNG/JPG 형식 유지
+        # ✅ PNG/JPG 형식 유지
         fmt = "PNG" if file.filename.lower().endswith(".png") else "JPEG"
         ctype = "image/png" if fmt == "PNG" else "image/jpeg"
 
@@ -131,62 +130,59 @@ def analyze_image(file: UploadFile = File(...), model: str = Form(DEFAULT_MODEL)
         
         result_text = call_gpt_vision(data_url, model=model)
 
-        # JSON 추출 시도
+        # ✅ JSON 추출 시도
         try:
-            # GPT가 JSON 이외 텍스트를 붙여보냈을 경우 중괄호 부분만 파싱
             match = re.search(r"\{[\s\S]*\}", result_text)
             if not match:
                 raise ValueError("No JSON object found in GPT response")
 
             parsed = json.loads(match.group(0))
-            ##############
-            ##############
-            # ✅ GPT에게 재활용 방법 요청 (PROMPT2 활용)
-            ##############
-            try:
-                items = parsed.get("items", [])
-                if not isinstance(items, list):
-                    raise ValueError("items 필드가 리스트 형태가 아닙니다.")
 
-                # call_gpt에 전달할 문자열 (JSON 직렬화된 리스트 형태)
-                items_json = json.dumps(items, ensure_ascii=False)
+            # ✅ items 필드 검증
+            items = parsed.get("items", [])
+            if not isinstance(items, list):
+                raise ValueError("items 필드가 리스트 형태가 아닙니다.")
 
-                # GPT에게 각 품목의 재활용 방법 요청
-                disposal_response = client.responses.create(
-                    model=model,
-                    input=[
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "input_text", "text": PROMPT2 + f"\n\n입력 리스트: {items_json}"}
-                            ],
-                        }
-                    ],
-                )
+            # ✅ 만약 items가 비어 있으면 — 사용자에게 안내 메시지 반환
+            if not items:
+                parsed = {
+                    "message": "잘못된 이미지입니다.",
+                    "items": [],
+                    "disposal_methods": ["올바른 이미지를 입력해주세요."],
+                    "description": "올바른 이미지를 입력해주세요.",
+                }
+                return JSONResponse({"result": parsed}, status_code=200)
 
-                # 결과 텍스트만 추출
-                disposal_text = disposal_response.output_text.strip()
+            # ✅ GPT에게 재활용 방법 요청
+            items_json = json.dumps(items, ensure_ascii=False)
+            disposal_response = client.responses.create(
+                model=model,
+                input=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "input_text", "text": PROMPT2 + f"\n\n입력 리스트: {items_json}"}
+                        ],
+                    }
+                ],
+            )
 
-                # GPT가 반환한 결과를 리스트로 파싱 (문자열을 그대로 파싱 시도)
-                match_list = re.search(r"\[.*\]", disposal_text, re.DOTALL)
-                if match_list:
-                    disposal_methods = json.loads(match_list.group(0))
-                else:
-                    disposal_methods = [disposal_text]
+            disposal_text = disposal_response.output_text.strip()
 
-                # parsed에 재활용 방법 추가
-                parsed["disposal_methods"] = disposal_methods
+            # ✅ disposal 결과 파싱
+            match_list = re.search(r"\[.*\]", disposal_text, re.DOTALL)
+            if match_list:
+                disposal_methods = json.loads(match_list.group(0))
+            else:
+                disposal_methods = [disposal_text]
 
-            except Exception as e:
-                parsed["disposal_methods"] = [f"처리 방법 생성 중 오류 발생: {str(e)}"]
+            parsed["disposal_methods"] = disposal_methods
 
-            #그래서 parsed에 "disposal_methods"라는 키로 리스트 형태로 재활용 방법들을 추가해줘
-            
-            
         except json.JSONDecodeError as e:
             raise HTTPException(status_code=500, detail=f"JSON parse error: {str(e)}")
 
         print("[DEBUG] parsed =", parsed)
         return JSONResponse({"result": parsed})
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
