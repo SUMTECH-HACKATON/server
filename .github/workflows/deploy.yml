@@ -1,9 +1,9 @@
 name: 🚀 Deploy Hackaton FastAPI to EC2
 
-on:
-  push:
-    branches:
-      - main # 또는 master, 너의 기본 브랜치 이름에 맞게 바꿔줘
+#on:
+#  push:
+#    branches:
+#      - main # 또는 master, 너의 기본 브랜치 이름에 맞게 바꿔줘
 
 jobs:
   deploy:
