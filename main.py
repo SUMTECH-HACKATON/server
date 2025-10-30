@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from vision_analyzer import router as vision_router  # ✅ 모듈 import
 
 app = FastAPI(
     title="FastAPI Server on Port 8001",
@@ -6,6 +7,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# 기본 라우트
 @app.get("/")
 def read_root():
     return {"message": "Hello from FastAPI on port 8001!"}
@@ -14,5 +16,8 @@ def read_root():
 def ping():
     return {"status": "ok"}
 
-# 이 파일은 uvicorn으로 실행:
+# ✅ vision_analyzer 라우터 등록
+app.include_router(vision_router)
+
+# 실행:
 # uvicorn main:app --host 0.0.0.0 --port 8001 --reload
