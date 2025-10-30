@@ -243,6 +243,44 @@ def analyze_image(file: UploadFile = File(...), model: str = Form(DEFAULT_MODEL)
         except json.JSONDecodeError:
             tips = [s.strip() for s in re.split(r"[\n\-•]", tip_text) if s.strip()]
 
+        
+        # -----------------------------
+        # 6️⃣ 품목별 대표 이미지 URL 추가
+        # -----------------------------
+        IMAGE_DIR = ROOT_DIR / "image"
+        IMAGE_MAP = {
+            "플라스틱": "Pet.png",
+            "페트": "Pet.png",
+            "병": "Pet.png",
+            "캔": "Can.png",
+            "종이": "Paper.png",
+            "상자": "Paper.png",
+            "박스": "Paper.png",
+            "유리": "Glass.png",
+            #"스티로폼": "Styrofoam.png",
+            #"비닐": "Vinyl.png",
+            #"고철": "Metal.png",
+            #"철": "Metal.png",
+        }
+
+        selected_img = None
+        for item in items:
+            normalized = re.sub(r"\s+", "", item)  # 공백 제거
+            for key, fname in IMAGE_MAP.items():
+                if key in normalized:
+                    selected_img = fname
+                    break
+            if selected_img:
+                break
+
+        if selected_img:
+            # 프론트엔드 렌더링용 URL (FastAPI static mount 기준)
+            image_url = f"/static/{selected_img}"
+        else:
+            image_url = None  # 매칭 실패 시 None
+
+        parsed["image_url"] = image_url
+
         # -----------------------------
         # 6️⃣ 최종 결과 반환
         # -----------------------------
